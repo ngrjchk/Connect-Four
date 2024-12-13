@@ -1,4 +1,4 @@
-# 4-in-a-row  
+# Connect-Four  
 Connect-4 game implemented using Python-PySide6 and with an AI agent inspired by DeepMind's AlphaZero algorithm.
   
 These are some screenshots of the game:  
