@@ -417,7 +417,7 @@ class pieceSelector(QWidget):
         qp = QPainter(self)
         qp.setRenderHint(QPainter.Antialiasing)
         self.drawPieceSelector()
-        qp.setBackground(QBrush(QColor(0, 0, 0, 100)))
+        qp.fillRect(self.rect(), QBrush(QColor(0, 0, 0, 100)))
         qp.end()
 
 class pauseGame(QWidget):
