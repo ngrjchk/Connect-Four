@@ -148,6 +148,7 @@ class gameInfoWidget(QWidget):
                 Qt.AlignCenter,
                 f"{self.turnStr[self.parent().player.value]}"
             )
+            print("Hello")
 
     def paintEvent(self, event):
         qp = QPainter(self)
