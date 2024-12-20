@@ -30,7 +30,7 @@ class AlphaZero(QThread):
         self.game = ConnectFour_Logic.ConnectFour()
         self.args = {
             'C': 2,
-            'num_searches': 2048,
+            'num_searches': 200,
             'dirichlet_epsilon': 0.0,
             'dirichlet_alpha': 0.3
         }
@@ -78,9 +78,6 @@ class gameInfoWidget(QWidget):
             self.rect().width(),
             self.rect().height()*(1/3)
         )
-        qp.setFont(self.emoji_font)
-        qp.setFont(self.status_text_font)
-        qp.fillRect(self.rect(), QBrush(QColor(hex(0))))
         if self.parent().status != gameStatus.IN_PROGRESS:
             if self.parent().status.value == 0:
                 qp.setFont(self.emoji_font)
@@ -135,12 +132,11 @@ class gameInfoWidget(QWidget):
                     "You Won!"
                 )
         else:
-            self.emoji_font = QFont("HP Simplified JPan",50)
             qp.setFont(self.emoji_font)
             qp.drawText(
                 self.emoji_rect,
                 Qt.AlignCenter,
-                f"{self.currentPiece[self.parent().board.moveCount%2]}"
+                f"{self.currentPiece[self.parent().board.moveCount%2-1]}"
             )
             qp.setFont(self.status_text_font)
             qp.drawText(
@@ -148,12 +144,13 @@ class gameInfoWidget(QWidget):
                 Qt.AlignCenter,
                 f"{self.turnStr[self.parent().player.value]}"
             )
-            print("Hello")
-
+            
     def paintEvent(self, event):
         qp = QPainter(self)
         if not qp.isActive():
             qp.begin(self)
+        qp.setPen(Qt.white)
+        qp.fillRect(self.rect(), QBrush(QColor(0, 0, 0)))
         self.draw_status(qp)
         qp.end()
             
@@ -210,7 +207,7 @@ class TimerWidget(QWidget):
         pen.setWidth(10)
         qp.setPen(pen)
         qp.drawEllipse(rect)
-        if self.parent().board.moveCount%2 == 1:
+        if self.parent().board.moveCount%2 == 0:
             pen.setColor(QColor(0, 210, 106))
         else:
             pen.setColor(QColor(0, 116, 186))
@@ -233,7 +230,7 @@ class Connect4Board(QWidget):
         self.button_i_status = [True for _ in range(7)]
         self.state = np.zeros([6,7])
         self.moveSequence = np.zeros([6,7])
-        self.moveCount = 1
+        self.moveCount = 0
         self.initUI()
 
     def initUI(self):
@@ -271,7 +268,7 @@ class Connect4Board(QWidget):
         qp.end()
         
     def drawGrid(self, qp):
-        qp.setPen(Qt.white)
+        qp.setPen(QColor(150, 150, 150))
         qp.setBrush(Qt.white)
         for i in range(0, 7):
            qp.drawLine(0.48*self.cellWidth, (i+0.5)*self.cellWidth, 7.48*self.cellWidth, (i+0.5)*self.cellWidth)
@@ -282,7 +279,7 @@ class Connect4Board(QWidget):
         for i in range(0, 6):
             for j in range(0, 7):
                 if self.state[i][j]:
-                    if self.moveSequence[i][j]%2 == 1:
+                    if abs(self.moveSequence[i][j])%2 == 0:
                         qp.setPen(QColor(0, 210, 106))
                         qp.setBrush(QColor(0, 210, 106))
                     else:
@@ -296,7 +293,7 @@ class Connect4Board(QWidget):
             self.button_i_status[column] = False
         self.toggleMoveButtons(False)
         self.state[row][column] = self.parent().player.value
-        self.moveSequence[row][column] = self.moveCount
+        self.moveSequence[row][column] = self.moveCount*self.parent().player.value
         self.update()
         self.moveCount += 1
         if self.c4logic.check_win(self.state, column):
@@ -312,6 +309,8 @@ class Connect4Board(QWidget):
         else:
             self.parent().timer.resetTimer()
             self.parent().switchPlayer()
+            self.parent().undoMoveButton.undoMoveButton.setEnabled(True)
+            self.parent().alphazero._running = True
             self.parent().alphazero.start()
         self.parent().gameInfo.update()
 
@@ -324,7 +323,7 @@ class Connect4Board(QWidget):
             for column in range(7):
                 if lonely_next_move[row][column] == 1:
                     self.state[row][column] = -1
-                    self.moveSequence[row][column] = self.moveCount
+                    self.moveSequence[row][column] = self.moveCount*self.parent().player.value
                     break
             if lonely_next_move[row][column] == 1:
                 break
@@ -384,6 +383,7 @@ class pieceSelector(QWidget):
             self.parent().player = CurrentPlayer.HUMAN
         elif i == 1:
             self.parent().player = CurrentPlayer.COMPUTER
+            self.parent().alphazero.start()
             self.parent().board.toggleMoveButtons(False)
         for i in range(0,2):
             self.choiceButtons[i].setEnabled(False)
@@ -392,7 +392,6 @@ class pieceSelector(QWidget):
         self.parent().graphicsEffects(False)
         self.parent().timer.start()
         self.parent().timer.timer.start(100)
-        self.parent().alphazero.start()
         self.parent().blurPauseButton(False)
 
     def drawPieceSelector(self):
@@ -430,9 +429,9 @@ class pauseGame(QWidget):
         self.pauseButton.setFont(font)
         self.pauseButton.setGeometry(QRect(
             3*self.parent().cellWidth*1/5,
-            1.875*self.parent().cellWidth*2/10,
+            self.parent().cellWidth*1/6,
             3*self.parent().cellWidth*3/5,
-            2.5*self.parent().cellWidth*1/5
+            self.parent().cellWidth*1/2
         ))
         self.pauseButton.clicked.connect(self.pause)
         
@@ -442,12 +441,14 @@ class pauseGame(QWidget):
             self.parent().graphicsEffects(True)
             self.pauseButton.setText("Resume")
             self.parent().timer.timer.stop()
+            self.parent().undoMoveButton.undoMoveButton.setEnabled(False)
             self.parent().restartGameButton.restartGameButton.setEnabled(False)
         else:
             self.parent().graphicsEffects(False)
             self.pauseButton.setText("Pause")
             if self.parent().status == gameStatus.IN_PROGRESS:
                 self.parent().timer.timer.start()
+            self.parent().undoMoveButton.undoMoveButton.setEnabled(True)
             self.parent().restartGameButton.restartGameButton.setEnabled(True)
         self.pauseFlag = not self.pauseFlag
 
@@ -464,12 +465,12 @@ class restartGameButton(QWidget):
         self.restartGameButton = QPushButton("Restart", self)
         font = QFont("HP Simplified JPan", 16)
         self.restartGameButton.setFont(font)
-        self.restartGameButton.clicked.connect(functools.partial(self.parent().restartGame.restartAll))
+        self.restartGameButton.clicked.connect(functools.partial(self.parent().alterGameState.restartAll))
         self.restartGameButton.setGeometry(QRect(
             3*self.parent().cellWidth*1/5,
-            0.875*self.parent().cellWidth*2/5,
+            self.parent().cellWidth*1/6,
             3*self.parent().cellWidth*3/5,
-            2.5*self.parent().cellWidth*1/5
+            self.parent().cellWidth*1/2
         ))
 
     def paintEvent(self, event):
@@ -479,16 +480,18 @@ class restartGameButton(QWidget):
         qp.fillRect(self.rect(), QBrush(QColor(0, 0, 0)))
         qp.end()
 
-class restartGame():
+class alterGameState():
     def __init__(self, super):
         self.super = super
+
     def restartAll(self):
         self.super.status = gameStatus.NOT_STARTED
         self.super.player = CurrentPlayer.NONE
         self.super.alphazero._running = False
+        self.super.alphazero.wait()
         self.super.board.state = np.zeros([6,7])
         self.super.board.moveSequence = np.zeros([6,7])
-        self.super.board.moveCount = 1
+        self.super.board.moveCount = 0
         self.super.timer.resetTimer()
         self.super.board.button_i_status = [True for _ in range(7)]
         self.super.board.toggleMoveButtons(True)
@@ -497,6 +500,56 @@ class restartGame():
         self.super.pieceSelector.setVisible(True)
         for i in range(0,2):
             self.super.pieceSelector.choiceButtons[i].setEnabled(True)
+
+    def undoMove(self):
+        if self.super.alphazero.isRunning():
+            self.super.alphazero._running = False
+            self.super.alphazero.wait()
+        last_human_move = np.where(self.super.board.moveSequence[:,:] == np.max(self.super.board.moveSequence))
+        last_computer_move = np.where(self.super.board.moveSequence[:,:] == np.min(self.super.board.moveSequence))
+        if self.super.board.moveSequence[last_human_move[0][0], last_human_move[1][0]] < abs(self.super.board.moveSequence[last_computer_move[0][0], last_computer_move[1][0]]):
+            self.super.board.state[last_computer_move[0][0], last_computer_move[1][0]] = 0
+            self.super.board.moveCount -= 1
+            self.super.board.moveSequence[last_computer_move[0][0], last_computer_move[1][0]] = 0
+        self.super.board.state[last_human_move[0][0], last_human_move[1][0]] = 0
+        self.super.board.moveCount -= 1
+        self.super.board.moveSequence[last_human_move[0][0], last_human_move[1][0]] = 0
+        self.super.board.button_i_status = [True for _ in range(7)]
+        for i in list(np.where(self.super.board.state[0, :] != 0)[0]):
+            self.super.board.button_i_status[i] = False
+        self.super.player = CurrentPlayer.HUMAN
+        if self.super.status != gameStatus.IN_PROGRESS:
+            self.super.status = gameStatus.IN_PROGRESS
+            self.super.timer.timer.start(100)
+        self.super.timer.resetTimer()
+        self.super.board.update()
+        self.super.gameInfo.update()
+        self.super.undoMoveButton.update()
+        self.super.board.toggleMoveButtons(True)
+
+class undoMoveButton(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.undoMoveButton = QPushButton("Undo", self)
+        font = QFont("HP Simplified JPan", 16)
+        self.undoMoveButton.setFont(font)
+        rect = QRect(
+            3*self.parent().cellWidth*1/5,
+            self.parent().cellWidth*1/6,
+            3*self.parent().cellWidth*3/5,
+            self.parent().cellWidth*1/2
+        )
+        self.undoMoveButton.setGeometry(rect)
+        self.undoMoveButton.clicked.connect(self.parent().alterGameState.undoMove)
+
+    def paintEvent(self, event):
+        qp = QPainter(self)
+        if not qp.isActive():
+            qp.begin(self)
+        qp.fillRect(self.rect(), QBrush(QColor(0, 0, 0)))
+        if self.parent().board.moveCount <= 2:
+            self.undoMoveButton.setEnabled(False)
+        qp.end()
 
 class mainWindow(QMainWindow):
     gameOverSignal = Signal()
@@ -510,7 +563,7 @@ class mainWindow(QMainWindow):
         self.cellWidth = 80
         self.playerAction = 0
         self.player = CurrentPlayer.NONE
-        self.restartGame = restartGame(self)
+        self.alterGameState = alterGameState(self)
         random.seed(time.time_ns())
         self.initUI()
 
@@ -518,7 +571,7 @@ class mainWindow(QMainWindow):
         self.setWindowTitle("Connect-Four")
         self.setGeometry(
             2.5 * self.cellWidth,
-            1 * self.cellWidth,
+            0.5 * self.cellWidth,
             10.5 * self.cellWidth,
             7.5 * self.cellWidth
         )
@@ -532,6 +585,7 @@ class mainWindow(QMainWindow):
         self.restartGameButton = restartGameButton(self)
         self.pauseGame = pauseGame(self)
         self.pieceSelector = pieceSelector(self)
+        self.undoMoveButton = undoMoveButton(self)
 
         self.computerMoveSignal.connect(self.board.computerMove)
         self.timeElapsedSignal.connect(self.timerGUI.timeElapsed)
@@ -564,17 +618,23 @@ class mainWindow(QMainWindow):
             3 * self.cellWidth,
             2 * self.cellWidth
         )
-        self.restartGameButton.setGeometry(
-            7.5*self.cellWidth,
-            6.25*self.cellWidth,
-            3*self.cellWidth,
-            1.25*self.cellWidth
-        )
-        self.pauseGame.setGeometry(
+        self.undoMoveButton.setGeometry(
             7.5*self.cellWidth,
             5*self.cellWidth,
             3*self.cellWidth,
-            1.25*self.cellWidth
+            (2.5/3)*self.cellWidth
+        )
+        self.pauseGame.setGeometry(
+            7.5*self.cellWidth,
+            (5+(2.5/3))*self.cellWidth,
+            3*self.cellWidth,
+            (2.5/3)*self.cellWidth
+        )
+        self.restartGameButton.setGeometry(
+            7.5*self.cellWidth,
+            (5+5/3)*self.cellWidth,
+            3*self.cellWidth,
+            (2.5/3)*self.cellWidth
         )
 
         self.graphicsEffects(True)
@@ -586,6 +646,7 @@ class mainWindow(QMainWindow):
         self.restartGameButton.show()
         self.blurPauseButton(True)
         self.pauseGame.show()
+        self.undoMoveButton.show()
         self.show()
 
     def blurPauseButton(self, on):
@@ -614,11 +675,16 @@ class mainWindow(QMainWindow):
             blurEffect.setBlurRadius(10)
             self.restartGameButton.setGraphicsEffect(blurEffect)
 
+            blurEffect = QGraphicsBlurEffect(self)
+            blurEffect.setBlurRadius(10)
+            self.undoMoveButton.setGraphicsEffect(blurEffect)
+
         else:
             self.board.setGraphicsEffect(None)
             self.timerGUI.setGraphicsEffect(None)
             self.gameInfo.setGraphicsEffect(None)
             self.restartGameButton.setGraphicsEffect(None)
+            self.undoMoveButton.setGraphicsEffect(None)
 
     def paintEvent(self, event):
         qp = QPainter(self)
