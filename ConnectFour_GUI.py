@@ -30,7 +30,7 @@ class AlphaZero(QThread):
         self.game = ConnectFour_Logic.ConnectFour()
         self.args = {
             'C': 2,
-            'num_searches': 200,
+            'num_searches': 4096,
             'dirichlet_epsilon': 0.0,
             'dirichlet_alpha': 0.3
         }
@@ -295,18 +295,16 @@ class Connect4Board(QWidget):
         self.state[row][column] = self.parent().player.value
         self.moveSequence[row][column] = self.moveCount*self.parent().player.value
         self.update()
-        self.moveCount += 1
         if self.c4logic.check_win(self.state, column):
             self.parent().status = gameStatus.HUMAN_WON
-            self.moveCount -= 1
             self.parent().gameOverSignal.emit()
             print(self.parent().player,"Won")
         elif np.sum(self.c4logic.get_valid_moves(self.state)) == 0:
             self.parent().status = gameStatus.DRAW
-            self.moveCount -= 1
             self.parent().gameOverSignal.emit()
             print("Draw")
         else:
+            self.moveCount += 1
             self.parent().timer.resetTimer()
             self.parent().switchPlayer()
             self.parent().undoMoveButton.undoMoveButton.setEnabled(True)
@@ -329,7 +327,6 @@ class Connect4Board(QWidget):
                 break
         val = data["val"]
         self.update()
-        self.moveCount += 1
         if data["is_terminal"]:
             if val == 1:
                 self.parent().status = gameStatus.HUMAN_LOST
@@ -337,9 +334,9 @@ class Connect4Board(QWidget):
             else:
                 self.parent().status = gameStatus.DRAW
                 print("Draw")
-            self.moveCount -= 1
             self.parent().gameOverSignal.emit()
         else:
+            self.moveCount += 1
             if not self.parent().pauseGame.pauseFlag:
                 self.toggleMoveButtons(True)
             self.parent().timer.resetTimer()
@@ -519,6 +516,7 @@ class alterGameState():
             self.super.board.button_i_status[i] = False
         self.super.player = CurrentPlayer.HUMAN
         if self.super.status != gameStatus.IN_PROGRESS:
+            self.super.board.moveCount += 1
             self.super.status = gameStatus.IN_PROGRESS
             self.super.timer.timer.start(100)
         self.super.timer.resetTimer()
