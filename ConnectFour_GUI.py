@@ -30,7 +30,7 @@ class AlphaZero(QThread):
         self.game = ConnectFour_Logic.ConnectFour()
         self.args = {
             'C': 2,
-            'num_searches': 4096,
+            'num_searches': 2048,
             'dirichlet_epsilon': 0.0,
             'dirichlet_alpha': 0.3
         }
